@@ -132,7 +132,7 @@ class SAROpticalTripletDataset(Dataset):
         ref_optical = ref[:6]
         ref_cloud_mask = ref[6:7]
 
-        sar_norm = normalize_sar(sar)
+        sar_norm = normalize_sar(np.nan_to_num(sar, nan=0.0))
         ref_norm = normalize_optical(ref_optical)
         # ref_cloud_mask already 0/1, no normalization needed
 

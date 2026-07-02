@@ -2,20 +2,22 @@
 MODULE 7 — Main Training Script
 SAR-Guided Optical Reconstruction Pipeline (merged)
 ============================================================
-Trains the Attention U-Net (primary, deterministic, CompositeLoss from
-module3) and the GAN baseline (ablation, module5), on IDENTICAL
-patch-level splits, then evaluates BOTH on the held-out test set with the
-full metric battery (module6). Produces the final comparison table —
-this table is the actual Section "Why we chose U-Net" of the paper.
+Trains the GAN (PRIMARY, as of the 100-epoch comparison — empirically
+beat the deterministic U-Net on index-level R^2 across NDVI/NDWI/MNDWI)
+and the Attention U-Net (ablation/baseline), on IDENTICAL patch-level
+splits, then evaluates BOTH on the held-out test set with the full
+metric battery (module6).
+
+NEW: --band_weights flag, testing the BSI diagnostic experiment (see
+module3_loss.py / module5_gan_baseline.py docstrings). Default is
+unweighted (None), reproducing the exact original reported results.
 
 Patch-level split (not scene-level): splits by patch_id so the same
-physical 256x256 patch never appears in both train and val/test — this
-prevents spatial leakage that would silently inflate reported accuracy.
+physical 256x256 patch never appears in both train and val/test.
 
 Usage:
     python module7_train.py --manifest /path/to/manifest.csv --model both --epochs 100
-    python module7_train.py --manifest /path/to/manifest.csv --model unet --epochs 100
-    python module7_train.py --manifest /path/to/manifest.csv --model gan  --epochs 100
+    python module7_train.py --manifest /path/to/manifest.csv --model gan --epochs 100 --band_weights 2.0,1.0,2.0,1.0,1.0,1.0
 """
 
 import argparse
@@ -90,7 +92,7 @@ def get_dataloaders(manifest_csv, batch_size=8, val_split=0.15, test_split=0.15,
     val_ds = make_subset(full_dataset, val_rows, augment=False)
     test_ds = make_subset(full_dataset, test_rows, augment=False)
 
-    nw = 0 if os.uname().sysname == "Darwin" else 4  # 0 workers on Mac, multiprocessing issues
+    nw = 0
 
     return (
         DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=nw, drop_last=True),
@@ -99,10 +101,10 @@ def get_dataloaders(manifest_csv, batch_size=8, val_split=0.15, test_split=0.15,
     )
 
 
-def train_unet(train_loader, val_loader, epochs, device, lr=1e-4):
+def train_unet(train_loader, val_loader, epochs, device, lr=1e-4, band_weights=None):
     model = AttentionUNet(in_channels=9, out_channels=6, base_ch=64).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = CompositeLoss().to(device)
+    criterion = CompositeLoss(band_weights=band_weights).to(device)
 
     best_val_loss = float("inf")
     os.makedirs("checkpoints", exist_ok=True)
@@ -142,7 +144,7 @@ def train_unet(train_loader, val_loader, epochs, device, lr=1e-4):
     return model
 
 
-def train_gan(train_loader, val_loader, epochs, device, lr=2e-4):
+def train_gan(train_loader, val_loader, epochs, device, lr=2e-4, band_weights=None):
     generator = AttentionUNet(in_channels=9, out_channels=6, base_ch=64).to(device)
     discriminator = PatchDiscriminator(in_channels=9 + 6).to(device)
     opt_g = torch.optim.Adam(generator.parameters(), lr=lr, betas=(0.5, 0.999))
@@ -155,7 +157,8 @@ def train_gan(train_loader, val_loader, epochs, device, lr=2e-4):
         discriminator.train()
         running = {"loss_d": 0.0, "loss_g_adv": 0.0, "loss_g_l1": 0.0}
         for batch in train_loader:
-            stats = gan_training_step(generator, discriminator, opt_g, opt_d, batch, device=device)
+            stats = gan_training_step(generator, discriminator, opt_g, opt_d, batch,
+                                       device=device, band_weights=band_weights)
             for k in running:
                 running[k] += stats[k]
 
@@ -173,13 +176,7 @@ def train_gan(train_loader, val_loader, epochs, device, lr=2e-4):
 
 def evaluate_model(model, test_loader, device, model_name):
     model.eval()
-    keys = ["image_psnr", "image_ssim",
-            "ndvi_rmse", "ndvi_ssim", "ndvi_r2",
-            "ndwi_rmse", "ndwi_ssim", "ndwi_r2",
-            "mndwi_rmse", "mndwi_ssim", "mndwi_r2",
-            "bsi_rmse", "bsi_ssim", "bsi_r2",
-            "ndwi_shoreline_error_m"]
-    all_results = {k: [] for k in keys}
+    all_results = None
 
     with torch.no_grad():
         for batch in test_loader:
@@ -187,11 +184,29 @@ def evaluate_model(model, test_loader, device, model_name):
             targets = batch["target"].to(device)
             preds = model(inputs)
             batch_results = evaluate_batch(preds, targets)
+            if all_results is None:
+                all_results = {k: [] for k in batch_results}
             for k in all_results:
                 all_results[k].extend(batch_results[k])
 
-    print(f"\n=== {model_name} — Test Set Results (held-out, never-trained-on patches) ===")
+    print(f"\n=== {model_name} — Test Set Results ===")
     return summarize(all_results)
+
+
+def parse_band_weights(s):
+    if s is None:
+        return None
+    try:
+        vals = [float(x) for x in s.split(",")]
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            "band_weights must be 6 comma-separated numbers, e.g. 2.0,1.0,2.0,1.0,1.0,1.0"
+        )
+    if len(vals) != 6:
+        raise argparse.ArgumentTypeError(
+            f"band_weights must have exactly 6 values (B2,B3,B4,B8,B11,B12), got {len(vals)}"
+        )
+    return vals
 
 
 if __name__ == "__main__":
@@ -201,7 +216,17 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--manifest", type=str, required=True,
                          help="Path to manifest.csv produced by module1_build_manifest.py")
+    parser.add_argument("--band_weights", type=str, default=None,
+                         help="Optional 6 comma-separated weights for B2,B3,B4,B8,B11,B12 "
+                              "L1 loss term (e.g. '2.0,1.0,2.0,1.0,1.0,1.0' to up-weight "
+                              "B2/B4 per the BSI diagnostic). Default: unweighted, identical "
+                              "to previously reported results.")
     args = parser.parse_args()
+
+    band_weights = parse_band_weights(args.band_weights)
+    if band_weights is not None:
+        print(f"Using band_weights={band_weights} (B2,B3,B4,B8,B11,B12) — "
+              f"NOT the original unweighted configuration.")
 
     set_seed(42)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -212,11 +237,11 @@ if __name__ == "__main__":
     results_table = {}
 
     if args.model in ("unet", "both"):
-        unet_model = train_unet(train_loader, val_loader, args.epochs, device)
+        unet_model = train_unet(train_loader, val_loader, args.epochs, device, band_weights=band_weights)
         results_table["AttentionUNet"] = evaluate_model(unet_model, test_loader, device, "Attention U-Net")
 
     if args.model in ("gan", "both"):
-        gan_generator = train_gan(train_loader, val_loader, args.epochs, device)
+        gan_generator = train_gan(train_loader, val_loader, args.epochs, device, band_weights=band_weights)
         results_table["GAN"] = evaluate_model(gan_generator, test_loader, device, "Pix2Pix-style GAN")
 
     print("\n=== FINAL COMPARISON TABLE (use this in the paper) ===")

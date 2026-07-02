@@ -49,7 +49,7 @@ from datetime import datetime
 # PATHS — set these before running on the NIT PC
 # ============================================================
 # TODO: point this at wherever you sync/download the Drive folder
-DATASET_ROOT = Path("/path/to/sar_optical_dataset")  # <-- SET THIS
+DATASET_ROOT = Path("E:/SAR-Optical-Synthesis/data") # <-- SET THIS
 
 SAR_DIR = DATASET_ROOT / "sar_gap_input"
 REF_DIR = DATASET_ROOT / "optical_reference"
@@ -96,26 +96,25 @@ def infer_aoi(patch_id: str) -> str:
 # since this is the first place every downloaded file gets opened anyway.
 NODATA_THRESH = 0.10  # reject a file if >10% of its pixels are NaN/zero — same threshold as before
 
-
 def patch_quality_ok(filepath, nodata_thresh=NODATA_THRESH):
-    """
-    Returns (ok: bool, bad_fraction: float). Checks a single GeoTIFF for
-    excessive NaN or all-zero pixels, averaged across all its bands.
-    Applied to every SAR, reference, and ground-truth file individually —
-    a triplet is only kept if ALL THREE of its files pass.
-    """
     try:
         with rasterio.open(filepath) as src:
             data = src.read().astype(np.float32)
+            n_bands = data.shape[0]
     except Exception as e:
         print(f"WARNING: could not open {filepath} ({e}) — treating as failed quality check")
         return False, 1.0
 
+    # Exclude the last band if this is a reference file (7 bands) — band 6 is
+    # CLOUD_MASK which is legitimately all zeros for clear scenes and must not
+    # be counted as bad data
+    if n_bands == 7:
+        data = data[:6]
+
     total_pixels = data.size
-    bad_pixels = np.sum(~np.isfinite(data)) + np.sum(data == 0)
+    bad_pixels = np.sum(~np.isfinite(data))  # NaN/Inf only — zeros are valid in SAR and optical
     bad_fraction = bad_pixels / total_pixels
     return bad_fraction < nodata_thresh, float(bad_fraction)
-
 
 def index_files(directory: Path, pattern: re.Pattern):
     """Returns dict keyed by (patch_id, window_or_date) -> filepath string."""

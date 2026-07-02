@@ -1,0 +1,7 @@
+Metric,Value
+Mean absolute error (m),81.8
+Std of absolute error (m),130.15
+"Correlation (GAN vs GT distance), r",0.689
+% landward — GAN,80.0
+% landward — Ground truth,79.0
+N matched observations,100.0

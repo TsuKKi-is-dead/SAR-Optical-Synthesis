@@ -47,3 +47,5 @@ tensorboard_logs/
 # Environment variables
 .env
 .env.localvenv/
+
+.exe
