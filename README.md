@@ -4,7 +4,7 @@
 
 **Reconstructing Monsoon-Season Coastal Land Cover and Shoreline Position from Sentinel-1 SAR Using a Conditional Generative Adversarial Network**
 
-*A Case Study of the Brahmapur–Ganjam Coastline, Odisha, India*
+_A Case Study of the Brahmapur–Ganjam Coastline, Odisha, India_
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch)](https://pytorch.org/)
@@ -16,7 +16,7 @@
 
 ---
 
-> **The Problem:** The southwest monsoon (June–September) is the period of *peak coastal hazard* on India's Bay of Bengal coast — yet optical satellite monitoring is effectively impossible during these months owing to near-complete cloud cover. No monsoon-season shoreline or land cover map has ever existed for the Ganjam coastline.
+> **The Problem:** The southwest monsoon (June–September) is the period of _peak coastal hazard_ on India's Bay of Bengal coast — yet optical satellite monitoring is effectively impossible during these months owing to near-complete cloud cover. No monsoon-season shoreline or land cover map has ever existed for the Ganjam coastline.
 >
 > **This study fills that gap.**
 
@@ -29,71 +29,62 @@ This repository contains the full pipeline for a **conditional GAN (cGAN)** fram
 The model uses an **Attention U-Net** generator paired with a **70×70 PatchGAN** discriminator. Applied to three monsoon-onset dates (2021-06-03, 2022-06-10, 2023-06-05), reconstructed imagery was used to extract shorelines and classify coastal land cover — independently validated against real Sentinel-2 ground truth.
 
 This is a **companion study** to:
-> Pradhan M. (2025a). *Multi-temporal shoreline change analysis and land cover dynamics of the Ganjam coastline, Odisha, India (2013–2024): a remote sensing and DSAS approach.* [submitted]
+
+> Pradhan M. (2025a). _Multi-temporal shoreline change analysis and land cover dynamics of the Ganjam coastline, Odisha, India (2013–2024): a remote sensing and DSAS approach._ [submitted]
 
 ---
 
 ## 🏆 Key Results
 
-| Metric | U-Net (Ablation) | **cGAN (Primary)** |
-|--------|-----------------|-------------------|
-| PSNR (dB) | 29.17 | **33.30** |
-| SSIM | 0.818 | **0.873** |
-| NDWI R² | 0.075 | **0.776** |
-| MNDWI R² | 0.032 | **0.797** |
-| NDVI R² | −0.328 | **0.734** |
+| Metric    | U-Net (Ablation) | **cGAN (Primary)** |
+| --------- | ---------------- | ------------------ |
+| PSNR (dB) | 29.17            | **33.30**          |
+| SSIM      | 0.818            | **0.873**          |
+| NDWI R²   | 0.075            | **0.776**          |
+| MNDWI R²  | 0.032            | **0.797**          |
+| NDVI R²   | −0.328           | **0.734**          |
 
 > The U-Net baseline NDWI R² ≈ 0.075 would produce physically meaningless shoreline extractions. **Adversarial training is not a perceptual refinement — it is structurally necessary.**
 
 **Monsoon Shoreline Signal (119 DSAS transects):**
 
-| Year | n valid | Mean displacement (m) | Std (m) |
-|------|---------|-----------------------|---------|
-| 2021 | 78 | −47.2 | 220.4 |
-| 2022 | 80 | −95.5 | 187.2 |
-| 2023 | 72 | −43.4 | 213.0 |
-| Post-monsoon baseline | 309 | 37.2% landward | — |
+| Year                  | n valid | Mean displacement (m) | Std (m) |
+| --------------------- | ------- | --------------------- | ------- |
+| 2021                  | 78      | −47.2                 | 220.4   |
+| 2022                  | 80      | −95.5                 | 187.2   |
+| 2023                  | 72      | −43.4                 | 213.0   |
+| Post-monsoon baseline | 309     | 37.2% landward        | —       |
 
 **80.0% of monsoon-onset shorelines were landward of post-monsoon counterparts** (post-monsoon baseline: 37.2%). Validated against ground truth: **80.0% (GAN) vs. 79.0% (GT)** — a one-percentage-point difference across 100 matched transect-year observations.
 
 **Monsoon Land Cover (MNDWI-threshold, km²):**
 
-| Year | Land | Intertidal | Water | Total |
-|------|------|------------|-------|-------|
-| 2021 | 49.516 | 7.135 | 8.582 | 65.233 |
-| 2022 | 48.405 | 7.141 | 9.688 | 65.234 |
+| Year     | Land       | Intertidal | Water     | Total      |
+| -------- | ---------- | ---------- | --------- | ---------- |
+| 2021     | 49.516     | 7.135      | 8.582     | 65.233     |
+| 2022     | 48.405     | 7.141      | 9.688     | 65.234     |
 | **2023** | **46.044** | **13.342** | **5.848** | **65.234** |
-
----
-
-## 🗺️ Study Area
-
-<!-- Replace with your AOI map image -->
-![Study Area](assets/fig_study_area.png)
-*Brahmapur–Ganjam coastline, Odisha, India (19.22°N–19.39°N, 84.84°E–85.06°E). ~60 km segment of the Bay of Bengal shore including the Rushikulya River mouth, a critical Olive Ridley sea turtle mass-nesting site.*
 
 ---
 
 ## 🏗️ Architecture
 
-<!-- Replace with your architecture diagram (Fig. 1 from paper) -->
-![Model Architecture](assets/fig1_architecture.png)
-*Conditional GAN architecture. **Generator**: Attention U-Net (encoder widths 64/128/256/512, 1024-ch bottleneck, attention-gated skip connections). **Discriminator**: 70×70 PatchGAN classifying overlapping patches as real or generated.*
+![Model Architecture](assets/gan_architecture_diagram.png)
+_Conditional GAN architecture. **Generator**: Attention U-Net (encoder widths 64/128/256/512, 1024-ch bottleneck, attention-gated skip connections). **Discriminator**: 70×70 PatchGAN classifying overlapping patches as real or generated._
 
 ### Why This Architecture?
 
-- **Why U-Net over a plain encoder–decoder?** Skip connections carry high-resolution spatial structure directly to the decoder, preserving sharp water–land boundaries that shoreline extraction requires. A bottleneck-only design loses this detail.
+- **Why U-Net over a plain encoder–decoder?** Skip connections carry high-resolution spatial structure directly to the decoder, preserving sharp water–land boundaries that shoreline extraction requires. A bottleneck-only design loses this spatial detail.
 - **Why Attention Gates over standard skips?** Standard U-Net passes all encoder features indiscriminately, including irrelevant inland vegetation. Attention gates (Oktay et al. 2018) suppress these, concentrating decoder capacity on the beach face and intertidal zone — precisely the pixels that determine shoreline position.
-- **Why PatchGAN over a full-image discriminator?** A full-image discriminator assesses realism at scene level, too coarse for local spectral contrast at the water–land boundary. The 70×70 PatchGAN penalises any locally unrealistic patch, which is directly responsible for recovering water-index fidelity (NDWI R² 0.776 vs. 0.075).
-- **Why not Transformers or Diffusion models?** Both require far more data than the 311 within-domain paired patches available here. Transformer self-attention scales quadratically at 256×256; diffusion models need large denoising-step datasets. The within-domain convolutional cGAN achieves PSNR 33.30 dB / SSIM 0.873 without overfitting, and Run 3 confirmed that additional capacity actively degrades water-index metrics — the bottleneck is domain data, not model expressivity.
+- **Why PatchGAN over a full-image discriminator?** A full-image discriminator assesses realism at scene level, too coarse for local spectral contrast. The 70×70 PatchGAN penalises any locally unrealistic patch, which is directly responsible for recovering water-index fidelity (NDWI R² 0.776 vs. 0.075).
+- **Why not Transformers or Diffusion models?** Both require far more data than the 311 within-domain paired patches available here. Transformer self-attention scales quadratically at 256×256; diffusion models need large denoising-step datasets. The convolutional cGAN achieves PSNR 33.30 dB / SSIM 0.873 without overfitting — and Run 3 confirmed additional capacity _actively degrades_ water-index metrics, confirming the bottleneck is domain data, not model expressivity.
 
 ---
 
 ## 🔄 End-to-End Pipeline
 
-<!-- Replace with your pipeline diagram (Fig. 2 from paper) -->
-![Pipeline](assets/fig2_pipeline.png)
-*Full inference pipeline: Sentinel-1 SAR + pre-monsoon optical reference → 9-channel GAN input → reconstructed 6-band optical mosaic (72 patches/year) → parallel shoreline extraction (MNDWI threshold 0.0) and LULC classification (two-threshold MNDWI rule).*
+![Pipeline](assets/methodology_pipeline_diagram.png)
+_Full inference pipeline: Sentinel-1 SAR + pre-monsoon optical reference → 9-channel GAN input → reconstructed 6-band optical mosaic (72 patches/year) → parallel shoreline extraction (MNDWI threshold 0.0) and LULC classification (two-threshold MNDWI rule)._
 
 ---
 
@@ -101,35 +92,13 @@ This is a **companion study** to:
 
 ```
 .
-├── gee/
-│   └── patch_extraction.js        # GEE script: SAR + optical patch extraction
-├── data/
-│   ├── patches/                   # 256×256 px SAR–optical patch pairs (not tracked)
-│   └── transects/                 # 119 DSAS transect shapefiles
-├── model/
-│   ├── generator.py               # Attention U-Net generator
-│   ├── discriminator.py           # 70×70 PatchGAN discriminator
-│   ├── loss.py                    # Adversarial + L1 composite loss
-│   └── dataset.py                 # Patch dataset loader
-├── train.py                       # Training script (100 epochs, seed 42)
-├── inference.py                   # Monsoon inference + mosaicking
-├── shoreline/
-│   ├── extract_shoreline.py       # MNDWI threshold + Tampara Lake mask
-│   └── dsas_transects.py          # DSAS transect intersection + signed distance
-├── lulc/
-│   └── classify_lulc.py           # Two-threshold MNDWI land cover classification
-├── validation/
-│   └── validate_ground_truth.py   # GAN vs. real Sentinel-2 comparison
-├── checkpoints/
-│   └── run2_unweighted/
-│       └── gan_generator_epoch100.pt   # Primary model checkpoint
-├── results/
-│   ├── shoreline_distances.csv
-│   ├── lulc_areas.csv
-│   └── validation_summary.csv
-├── assets/                        # Figures for README
-├── requirements.txt
-└── README.md
+├── assets/                              # All figures (see below)
+├── gee_scripts/                         # Google Earth Engine patch extraction
+├── training/                            # Model training code
+├── .gitignore
+├── LICENSE
+├── README.md
+└── requirements.txt
 ```
 
 ---
@@ -137,12 +106,13 @@ This is a **companion study** to:
 ## ⚙️ Setup & Installation
 
 ```bash
-git clone https://github.com/yourusername/monsoon-sar-gan-coastline.git
-cd monsoon-sar-gan-coastline
+git clone https://github.com/yourusername/SAR-Optical-Synthesis.git
+cd SAR-Optical-Synthesis
 pip install -r requirements.txt
 ```
 
-**Requirements** (key packages):
+**Key dependencies:**
+
 ```
 torch>=2.0
 torchvision
@@ -159,11 +129,13 @@ matplotlib
 ## 🚀 Usage
 
 ### 1. Patch Extraction (Google Earth Engine)
-Run `gee/patch_extraction.js` in the [GEE Code Editor](https://code.earthengine.google.com/). Set your GEE project to `sar-optical-synthesis`. Outputs 256×256 px patch pairs to Google Drive.
+
+Run the script in `gee_scripts/` in the [GEE Code Editor](https://code.earthengine.google.com/). Set your GEE project to `sar-optical-synthesis`. Outputs 256×256 px patch pairs (10 m GSD, UTM 45N) to Google Drive.
 
 ### 2. Training
+
 ```bash
-python train.py \
+python training/train.py \
   --data_dir data/patches \
   --epochs 100 \
   --lambda_l1 100 \
@@ -172,6 +144,7 @@ python train.py \
 ```
 
 ### 3. Monsoon Inference
+
 ```bash
 python inference.py \
   --checkpoint checkpoints/run2_unweighted/gan_generator_epoch100.pt \
@@ -181,12 +154,14 @@ python inference.py \
 ```
 
 ### 4. Shoreline Extraction & DSAS
+
 ```bash
 python shoreline/extract_shoreline.py --mosaic results/mosaics/2023 --threshold 0.0
 python shoreline/dsas_transects.py --shoreline results/shorelines/2023.shp
 ```
 
 ### 5. LULC Classification
+
 ```bash
 python lulc/classify_lulc.py --mosaic results/mosaics/2023 --output results/lulc/2023
 ```
@@ -197,60 +172,99 @@ python lulc/classify_lulc.py --mosaic results/mosaics/2023 --output results/lulc
 
 ### GAN-Reconstructed Mosaics
 
-<!-- Replace with Fig. 3 from paper -->
-![Reconstructed Mosaics](assets/fig3_mosaics.png)
-*GAN-reconstructed true-colour mosaics for 2021-06-03, 2022-06-10, 2023-06-05. 72 patches per mosaic at 10 m resolution. Note the markedly wider intertidal expression (pale strip) in 2023.*
+![Reconstructed Mosaics](assets/fig_reconstructed_rgb.png)
+_GAN-reconstructed true-colour mosaics for 2021-06-03, 2022-06-10, 2023-06-05. 72 patches per mosaic at 10 m resolution. The 2023 mosaic shows markedly wider intertidal expression (pale sandy strip) along the beach face relative to 2021–2022._
+
+---
 
 ### Per-Transect Seasonal Displacement
 
-<!-- Replace with Fig. 4 from paper -->
-![Seasonal Displacement](assets/fig4_displacement.png)
-*Mean seasonal displacement (monsoon − post-monsoon) at 119 DSAS transects, south to north. Colour = LRR erosion class from the companion study. Negative values = landward displacement.*
+![Seasonal Displacement](assets/fig_seasonal_displacement_bar.png)
+_Mean seasonal displacement (monsoon − post-monsoon) at 119 DSAS transects, ordered south to north. Colour denotes LRR erosion class from the companion study. Negative values indicate landward monsoon displacement._
 
-### Validation Against Ground Truth
+---
 
-<!-- Replace with Fig. 5 from paper -->
-![Validation](assets/fig5_validation.png)
-*Left: GAN vs. ground-truth shoreline distance scatter (r = 0.689, n = 100). Right: Per-transect along-coast agreement profile for 2021 (green) and 2023 (red).*
+### Validation Against Ground-Truth Optical Imagery
 
-### Monsoon LULC Maps
+![Validation](assets/fig_gan_vs_groundtruth_validation.png)
+_Left: GAN vs. ground-truth shoreline distance from baseline midpoint scatter plot (r = 0.689, n = 100). Right: Per-transect along-coast agreement profile for 2021 (green) and 2023 (red); solid lines = ground truth, dashed = GAN._
 
-<!-- Replace with Fig. 6 from paper -->
-![LULC Maps](assets/fig6_lulc.png)
-*Monsoon-season MNDWI-threshold land cover: 2021, 2022, 2023. Brown = Land, orange = Intertidal, blue = Water. The 2023 map shows a visibly broader intertidal band.*
+---
 
-### DSAS Erosion Hotspot Overlay
+### Monsoon LULC Maps (2021–2023)
 
-<!-- Replace with Fig. 8 from paper -->
-![Hotspot Overlay](assets/fig8_hotspot.png)
-*Monsoon LULC with DSAS erosion class overlay. Red ▼ = High Erosion (LRR ≤ −1.0 m/yr, n=36); green ▲ = High Accretion (n=38); yellow ● = Stable (n=24). Mean LRR = −0.222 m/yr (companion study).*
+![LULC Maps](assets/fig_lulc_monsoon_maps.png)
+_Monsoon-season MNDWI-threshold land cover classification: 2021-06-03 (left), 2022-06-10 (centre), 2023-06-05 (right). Brown = Land, orange = Intertidal, blue = Water. Note the substantially wider intertidal band in 2023._
+
+---
+
+### Seasonal LULC Comparison (Monsoon vs. Post-Monsoon)
+
+![Seasonal Comparison](assets/fig_lulc_monsoon_vs_postmonsoon.png)
+_Qualitative seasonal LULC comparison, 2021: post-monsoon (left, real Sentinel-2, companion study) vs. monsoon onset (right, GAN-reconstructed, this study). Both panels use the same MNDWI-threshold classification (Land / Intertidal / Water). Comparison is illustrative only; no pixel-aligned transition statistics are derived._
+
+---
+
+### DSAS Erosion Hotspot Overlay on Monsoon Land Cover
+
+**2023 (enlarged)**
+
+![Hotspot 2023](assets/fig_lulc_monsoon_erosion_hotspots_2023.png)
+
+**2021 and 2022**
+
+|                             2021-06-03                             |                             2022-06-10                             |
+| :----------------------------------------------------------------: | :----------------------------------------------------------------: |
+| ![Hotspot 2021](assets/fig_lulc_monsoon_erosion_hotspots_2021.png) | ![Hotspot 2022](assets/fig_lulc_monsoon_erosion_hotspots_2022.png) |
+
+_DSAS erosion class overlay on monsoon LULC. Red ▼ = High Erosion (LRR ≤ −1.0 m/yr, n=36); green ▲ = High Accretion (≥ +1.0 m/yr, n=38); yellow ● = Stable (−0.3 to +0.3 m/yr, n=24). Mean LRR = −0.222 m/yr (companion study). High Erosion transects concentrate at the Rushikulya river mouth, where the intertidal band is widest and most fragmented._
+
+---
+
+### MNDWI Threshold Checks
+
+|                          Baseline                          |                         Dual-Pol                         |                        Z-Score                         |
+| :--------------------------------------------------------: | :------------------------------------------------------: | :----------------------------------------------------: |
+| ![Threshold Baseline](assets/threshold_check_baseline.png) | ![Threshold Dualpol](assets/threshold_check_dualpol.png) | ![Threshold ZScore](assets/threshold_check_zscore.png) |
+
+_MNDWI threshold sensitivity checks across methods, confirming threshold = 0.0 as the optimal land–water boundary for this domain._
 
 ---
 
 ## 📐 Validation Summary
 
-| Metric | Value |
-|--------|-------|
-| Mean absolute error (MAE, m) | 81.8 |
-| Std of absolute error (m) | 130.2 |
-| Pearson r (GAN vs. Ground Truth) | 0.689 |
-| % transects landward — GAN | **80.0%** |
-| % transects landward — Ground Truth | **79.0%** |
-| N matched transect-year observations | 100 |
+| Metric                               | Value     |
+| ------------------------------------ | --------- |
+| Mean absolute error (MAE, m)         | 81.8      |
+| Std of absolute error (m)            | 130.2     |
+| Pearson r (GAN vs. Ground Truth)     | 0.689     |
+| % transects landward — GAN           | **80.0%** |
+| % transects landward — Ground Truth  | **79.0%** |
+| N matched transect-year observations | 100       |
 
-**Fragmentation note:** 73.5% of transect intersections were MultiPoint geometries (shoreline crosses transect at multiple points). Standard post-processing (nearest-prior selection, Gaussian smoothing, morphological closing) all *increased* MAE rather than reducing it — confirming fragmentation is irreducible reconstruction noise at the transect level. The coastline-wide aggregate signal is robust; site-specific claims at individual transects are not warranted.
+**Per-class MAE:** High Erosion 94.4 m · High Accretion 94.3 m · Moderate Erosion 75.7 m · Moderate Accretion 38.8 m · Stable 58.8 m — consistent with higher geomorphological complexity at river-mouth and depositional environments.
+
+**Fragmentation note:** 73.5% of transect intersections were MultiPoint geometries. Standard post-processing corrections (nearest-prior selection, Gaussian smoothing σ=1px, morphological closing) all _increased_ MAE rather than reducing it — confirming fragmentation is irreducible reconstruction noise at the transect level. The coastline-wide aggregate signal is robust; site-specific claims at individual transects are not warranted.
 
 ---
 
 ## 🔬 Data & Methods
 
-- **SAR data:** Sentinel-1 IW GRD, DESCENDING orbit, 3 monsoon-onset dates (2021-06-03, 2022-06-10, 2023-06-05)
-- **Optical reference:** Sentinel-2 L2A pre-monsoon clear-sky composite (Copernicus Programme / ESA)
-- **Training data:** 311 paired patches, Brahmapur + Mahanadi delta AOIs; 70/15/15 split, seed 42; test n = 46 patches
-- **Checkpoint:** `run2_unweighted/gan_generator_epoch100.pt`
-- **Platform:** Google Earth Engine (project: `sar-optical-synthesis`) + Python (PyTorch, Rasterio, GeoPandas)
-- **AOI:** 84.8433°E, 19.2221°N → 85.0599°E, 19.3906°N (EPSG:4326); UTM Zone 45N (EPSG:32645) for metric computation
-- **MNDWI shoreline threshold:** 0.0 (Xu 2006), with diagonal coastal-strip mask to exclude Tampara Lake
+| Item              | Detail                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| SAR input         | Sentinel-1 IW GRD, DESCENDING orbit, 2021-06-03, 2022-06-10, 2023-06-05               |
+| Optical reference | Sentinel-2 L2A pre-monsoon clear-sky composite (ESA Copernicus)                       |
+| GAN input         | 9-channel: VV + VH (2ch) + S2 reference B2/B3/B4/B8/B11/B12 (6ch) + cloud mask (1ch)  |
+| GAN output        | 6-channel: S2 B2/B3/B4/B8/B11/B12 at monsoon-onset date                               |
+| Patch size        | 256×256 px at 10 m GSD (2,560 × 2,560 m extent)                                       |
+| Training data     | 311 paired patches (Brahmapur + Mahanadi AOIs); 70/15/15 split, seed 42               |
+| Test set          | 46 patches (3,014,656 pixels for R²; 44 patches for shoreline error)                  |
+| Checkpoint        | `run2_unweighted/gan_generator_epoch100.pt`                                           |
+| AOI               | 84.8433°E, 19.2221°N → 85.0599°E, 19.3906°N (EPSG:4326)                               |
+| Projection        | UTM Zone 45N (EPSG:32645) for metric computation                                      |
+| MNDWI threshold   | 0.0 (Xu 2006); diagonal coastal-strip mask excludes Tampara Lake                      |
+| DSAS transects    | 119 transects at 250 m spacing, 2,000 m length, from 2013 baseline                    |
+| Platform          | Google Earth Engine (`sar-optical-synthesis`) + Python (PyTorch, Rasterio, GeoPandas) |
 
 ---
 
@@ -266,7 +280,7 @@ If you use this code or data, please cite:
   author  = {Pradhan, Mohit},
   journal = {[Under Review]},
   year    = {2025},
-  note    = {Companion study: Pradhan (2025a), multi-temporal DSAS analysis}
+  note    = {Companion study: Pradhan (2025a)}
 }
 ```
 
