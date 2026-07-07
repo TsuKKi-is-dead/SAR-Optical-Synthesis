@@ -33,6 +33,30 @@ from module4_attention_unet import AttentionUNet
 from module5_gan_baseline import PatchDiscriminator, gan_training_step
 from module6_evaluation import evaluate_batch, summarize
 
+from module14_wavelet_gan import WaveletAttentionUNet, wavelet_gan_training_step
+from module13_wavelet_utils import EdgeExtractor
+from module5_gan_baseline import PatchDiscriminator
+
+def train_wavelet_gan(train_loader, val_loader, epochs, device, lr=2e-4, band_weights=None):
+    generator = WaveletAttentionUNet(in_channels=9, out_channels=6, base_ch=64).to(device)
+    discriminator = PatchDiscriminator(in_channels=9 + 6).to(device)
+    edge_extractor = EdgeExtractor(channels=6).to(device)
+    opt_g = torch.optim.Adam(generator.parameters(), lr=lr, betas=(0.5, 0.999))
+    opt_d = torch.optim.Adam(discriminator.parameters(), lr=lr, betas=(0.5, 0.999))
+
+    for epoch in range(epochs):
+        generator.train(); discriminator.train()
+        running = {"loss_d": 0.0, "loss_g_adv": 0.0, "loss_g_l1": 0.0, "loss_g_edge": 0.0}
+        for batch in train_loader:
+            stats = wavelet_gan_training_step(generator, discriminator, edge_extractor,
+                                               opt_g, opt_d, batch, device=device, band_weights=band_weights)
+            for k in running: running[k] += stats[k]
+        n = max(len(train_loader), 1)
+        print(f"[WaveletGAN] Epoch {epoch+1}/{epochs} " + " ".join(f"{k}={v/n:.4f}" for k,v in running.items()))
+        if (epoch + 1) % 10 == 0:
+            torch.save(generator.state_dict(), f"checkpoints/wavelet_gan_generator_epoch{epoch+1}.pt")
+    return generator
+
 
 def set_seed(seed=42):
     random.seed(seed)
@@ -211,7 +235,7 @@ def parse_band_weights(s):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=["unet", "gan", "both"], default="both")
+    parser.add_argument("--model", choices=["unet", "gan", "wavelet_gan", "both"], default="both")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--manifest", type=str, required=True,
@@ -243,6 +267,10 @@ if __name__ == "__main__":
     if args.model in ("gan", "both"):
         gan_generator = train_gan(train_loader, val_loader, args.epochs, device, band_weights=band_weights)
         results_table["GAN"] = evaluate_model(gan_generator, test_loader, device, "Pix2Pix-style GAN")
+
+    if args.model in ("wavelet_gan", "both"):
+        wavelet_generator = train_wavelet_gan(train_loader, val_loader, args.epochs, device, band_weights=band_weights)
+        results_table["WaveletGAN"] = evaluate_model(wavelet_generator, test_loader, device, "Wavelet GAN (Li et al.-inspired)")
 
     print("\n=== FINAL COMPARISON TABLE (use this in the paper) ===")
     for model_name, metrics in results_table.items():
