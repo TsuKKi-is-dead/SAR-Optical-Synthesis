@@ -51,6 +51,24 @@ same attention gates, same first three decoder stages) and only
 replaces the FINAL decoder stage + output conv, which is the smallest,
 cheapest part to reimplement correctly in the available time.
 
+----------------------------------------------------------------
+FIX (post smoke-test, before full 100-epoch retrain):
+----------------------------------------------------------------
+The reconstructed 256x256 output from haar_iwt is NOT range-constrained
+overall, even though each individual wavelet subband IS constrained
+(Sigmoid on LL, scaled Tanh on LH/HL/HH). Reconstruction sums
+LL+LH+HL+HH per the average/difference Haar convention, and that sum
+can land outside [0,1] even when every input subband is in-range. This
+caused catastrophic NDWI/BSI R^2 and RMSE values in evaluation (index
+ratios like (green-nir)/(green+nir+eps) exploding when green+nir drifts
+near/below zero) — NOT a training or evaluation-code bug, but a missing
+output constraint that our Sigmoid-only AttentionUNet gets "for free"
+and this architecture does not. Fixed by clamping forward()'s final
+output to [0,1] (valid reflectance range), matching what every other
+model variant in this pipeline implicitly guarantees. This is applied
+BEFORE training (not just at eval) so the comparison is trained
+consistently, not patched only at the end.
+
 Usage (drop-in replacement for train_gan() in module7_train.py):
     from module14_wavelet_gan import (
         WaveletAttentionUNet, wavelet_gan_training_step,
@@ -83,9 +101,10 @@ class WaveletAttentionUNet(nn.Module):
     256x256 pixel space via inverse Haar wavelet transform (module13).
 
     forward() returns the FINAL 256x256, out_channels-channel image
-    (post-IWT) — identical output contract to AttentionUNet, so it's a
-    drop-in replacement everywhere downstream (loss, discriminator,
-    evaluation, module10/11/12 inference scripts).
+    (post-IWT, clamped to valid [0,1] reflectance range) — identical
+    output contract to AttentionUNet, so it's a drop-in replacement
+    everywhere downstream (loss, discriminator, evaluation,
+    module10/11/12 inference scripts).
     """
 
     def __init__(self, in_channels=9, out_channels=6, base_ch=64):
@@ -169,6 +188,17 @@ class WaveletAttentionUNet(nn.Module):
         wavelet_coeffs = self._split_activation(wavelet_raw)
 
         out = haar_iwt(wavelet_coeffs, channels=self.out_channels)  # (B, out_channels, 256, 256)
+
+        # --- FIX: enforce valid reflectance range ---
+        # LL+LH+HL+HH sum is NOT constrained to [0,1] even though each
+        # subband individually is (unlike the Sigmoid-only AttentionUNet,
+        # which guarantees [0,1] by construction). Without this clamp,
+        # a small number of pixels can land slightly negative or >1,
+        # which causes index ratios like (green-nir)/(green+nir+eps) to
+        # explode when green+nir drifts near zero, producing nonsensical
+        # RMSE/R^2 in evaluation despite normal-looking PSNR/SSIM.
+        out = torch.clamp(out, 0.0, 1.0)
+
         return out
 
 
@@ -267,7 +297,8 @@ if __name__ == "__main__":
     print(f"Output shape: {out.shape}  (expect (2, 6, 256, 256))")
     assert out.shape == (2, 6, 256, 256), "Output shape mismatch!"
     assert not torch.isnan(out).any(), "NaN in output!"
-    print("Forward pass shape/NaN check \u2713")
+    assert out.min() >= 0.0 and out.max() <= 1.0, "Output not clamped to [0,1]!"
+    print("Forward pass shape/NaN/range check \u2713")
 
     # Full training step smoke test
     opt_g = torch.optim.Adam(generator.parameters(), lr=2e-4, betas=(0.5, 0.999))
@@ -305,11 +336,14 @@ if __name__ == "__main__":
   this component alone). Our generator predicts Haar wavelet subband
   coefficients (LL/LH/HL/HH) rather than raw pixel values, which are
   then reconstructed via inverse wavelet transform; we additionally
-  adopt their EDGE loss term. We do not reimplement their dual
-  wavelet/multiscale-coloring discriminator or two-branch coloring
-  network, as these contribute less individually per their own Table
-  III and were not feasible to reproduce faithfully within our
-  single-domain, 311-patch training regime; our existing 70x70
-  PatchGAN discriminator (identical across all model variants
-  reported) is retained for a controlled comparison."
+  adopt their EDGE loss term. The reconstructed output is clamped to
+  [0,1] to enforce a valid reflectance range, matching the implicit
+  constraint our other model variants obtain via a final Sigmoid
+  activation. We do not reimplement their dual wavelet/multiscale-
+  coloring discriminator or two-branch coloring network, as these
+  contribute less individually per their own Table III and were not
+  feasible to reproduce faithfully within our single-domain, 311-patch
+  training regime; our existing 70x70 PatchGAN discriminator (identical
+  across all model variants reported) is retained for a controlled
+  comparison."
 """)
